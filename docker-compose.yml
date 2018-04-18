@@ -1,0 +1,27 @@
+version: '2'
+
+services:
+    db:
+        image: mysql
+        volumes:
+            - "./.data/db:/var/lib/mysql"
+        environment:
+            MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+            MYSQL_DATABASE: ${MYSQL_DATABASE}
+            MYSQL_USER: ${MYSQL_USER}
+            MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    php:
+        build: service
+        environment:
+            DEBUG: "true"
+            SERVICE_NAME: ${SERVICE_NAME}
+            SERVICE_DOMAIN: ${SERVICE_DOMAIN}
+        volumes:
+            - ./service:/var/www:Z
+            - ./logs/${SERVICE_NAME}.${SERVICE_DOMAIN}:/var/www/var/logs
+    nginx:
+        image: smmhub/nginx
+        ports:
+            - 80:80
+        volumes:
+            - ./logs/nginx/:/var/log/nginx

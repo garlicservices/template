@@ -1,0 +1,61 @@
+version: '2'
+services:
+    rabbit:
+        image: rancher/dns-service
+        external_links:
+            - Brokers/rabbit:rabbit
+
+    db:
+        image: mysql
+        environment:
+            MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+            MYSQL_DATABASE: ${MYSQL_DATABASE}
+            MYSQL_USER: ${MYSQL_USER}
+            MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+        labels:
+            io.rancher.container.pull_image: always
+            development: true
+
+    php:
+        image: $DOCKERHUB_NAME/$SERVICE_NAME.$SERVICE_DOMAIN:$TAG
+        labels:
+            io.rancher.container.pull_image: always
+            io.rancher.scheduler.affinity:host_label_ne: lb=true
+            io.rancher.scheduler.affinity:container_label_soft_ne: io.rancher.stack_service.name=$${stack_name}/$${service_name}
+            development: true
+        environment:
+            MYSQL_HOST: "${MYSQL_HOST}"
+            MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD}"
+            MYSQL_DATABASE: "${MYSQL_DATABASE}"
+            MYSQL_USER: "${MYSQL_USER}"
+            MYSQL_PASSWORD: "${MYSQL_PASSWORD}"
+            REDIS_HOST: "${REDIS_HOST}"
+            ContainerType: "service"
+            DEBUG: "${DEBUG}"
+            ENV: "${ENV}"
+            SERVICE_NAMESPACE: "${SERVICE_NAMESPACE}"
+
+    nginx:
+        image: smmhub/nginx
+        labels:
+            traefik.port: 80
+            traefik.frontend.rule: "Host:${FDQN_BACKEND}"
+            io.rancher.container.pull_image: always
+            io.rancher.scheduler.affinity:host_label_ne: lb=true
+            io.rancher.scheduler.affinity:container_label_soft_ne: io.rancher.stack_service.name=$${stack_name}/$${service_name}
+            development: true
+        volumes:
+            - "nginx_logs:/var/log/nginx"
+        links:
+            - php
+        depends_on:
+            - php:service_healthy
+    redis:
+        image: "redis:alpine"
+        labels:
+          development: true
+        volumes:
+            - "./redis/data:/bitnami/redis"
+
+volumes:
+    nginx_logs:

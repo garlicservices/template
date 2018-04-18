@@ -1,0 +1,13 @@
+security:
+    providers:
+        jwt_provider:
+            lexik_jwt:
+                class: Garlic\Auth\Security\User
+    firewalls:
+        main:
+            pattern:   ^/
+            stateless: true
+            anonymous: true
+            guard:
+                authenticators:
+                    - lexik_jwt_authentication.jwt_token_authenticator

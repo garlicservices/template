@@ -1,0 +1,273 @@
+version: 2.0
+
+references:
+    defaults: &defaults
+        working_directory: /workdir
+        docker:
+            - image: smmhub/essentials:2.0.2
+
+    deploys: &deploys
+        working_directory: /workdir
+        docker:
+            - image: smmhub/rancher:1.0.0
+
+    workspace_root: &workspace_root
+        /tmp/workspace
+
+    attach_workspace: &attach_workspace
+        attach_workspace:
+            at: *workspace_root
+
+    production_env: &production_env
+        run:
+            name:  Set Production Environment
+            command: |
+                if [[ "${CIRCLE_BRANCH}" == "master" ]]; then
+                    TAG=$(git log -1 --stat --pretty=oneline --format=%B  | sed -e "s/.*release.\([0-9]\+\.[0-9]\+\.[0-9]\+\).*$/\1/")
+                    echo "export MYSQL_DATABASE=${CIRCLE_PROJECT_REPONAME}" >> $BASH_ENV
+                else
+                    TAG=$(echo "$CIRCLE_BRANCH" | tr '[:upper:]' '[:lower:]' |sed 's/release\///g')
+                    echo "export MYSQL_DATABASE=staging_db" >> $BASH_ENV
+                fi
+                echo "export TAG=${TAG}" >> $BASH_ENV
+                echo "export RANCHER_STACK=${CIRCLE_PROJECT_REPONAME}" >> $BASH_ENV
+                echo "export ENV=production" >> $BASH_ENV
+                echo "export DEBUG=false" >> $BASH_ENV
+                echo "export RANCHER_ACCESS_KEY=${RANCHER_ACCESS_KEY_PROD}" >> $BASH_ENV
+                echo "export RANCHER_SECRET_KEY=${RANCHER_SECRET_KEY_PROD}" >> $BASH_ENV
+                echo "export MYSQL_HOST=${MYSQL_HOST_PROD}" >> $BASH_ENV
+                echo "export MYSQL_PASSWORD=${MYSQL_PASSWORD_PROD}" >> $BASH_ENV
+                echo "export MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD_PROD}" >> $BASH_ENV
+                echo "export FDQN_BACKEND=${SERVICE_NAME}.${SERVICE_DOMAIN}" >> $BASH_ENV
+                echo "export TAG_FRONT=${TAG}" >> $BASH_ENV
+
+    develop_env: &develop_env
+        run:
+            name:  Set Development Environment
+            command: |
+                TAG=$(echo "$CIRCLE_BRANCH" | tr '[:upper:]' '[:lower:]' | sed 's/feature\///g' | sed 's/hotfix\///g' | sed 's/release\///g')
+                echo "export TAG=${TAG}" >>$BASH_ENV
+                echo "export RANCHER_STACK=${TAG}-${CIRCLE_PROJECT_REPONAME}" >> $BASH_ENV
+                echo "export ENV=development" >> $BASH_ENV
+                echo "export DEBUG=true" >> $BASH_ENV
+                echo "export MYSQL_DATABASE=$(echo ${TAG} | sed 's/-/_/g')" >> $BASH_ENV
+                echo "export FDQN_BACKEND=${TAG}.${SERVICE_NAME}.${SERVICE_DEV_DOMAIN}" >> $BASH_ENV
+                echo "export TAG_FRONT=development" >> $BASH_ENV
+                echo "export SERVICE_NAMESPACE=development" >> $BASH_ENV
+
+    deploy_to_rancher: &deploy_to_rancher
+        run:
+           name:  deploy
+           command: |
+              cd templates/prod
+              rancher up --stack $RANCHER_STACK -p -u -c -d --force-upgrade
+
+    deploy_dev_to_rancher: &deploy_dev_to_rancher
+        run:
+           name:  deploy_dev
+           command: |
+              cd templates/dev
+              rancher up --stack $RANCHER_STACK -p -u -c -d --force-upgrade
+jobs:
+    test:
+        <<: *defaults
+        steps:
+            - checkout
+            - run:
+                name: Check codestyle for PSR2 standard
+                command: phpcs --standard=PSR2 service/src/
+            - run:
+                name: Check for deadcode
+                command: phpdcd service/src/
+            - run:
+                name: Check for copy/paste code
+                command: phpcpd service/src/
+            - run:
+                name: Check for usless variables and methods
+                command: phpmd service/src/ text unusedcode
+            - run:
+                name: Check for Naming rules
+                command: phpmd service/src/ text naming --exclude $id,$em,$qb
+            - run:
+                name: Check for codesize
+                command: phpmd service/src/ text codesize
+            - run:
+                name: Check for design rules
+                command: phpmd service/src/ text design
+            - restore_cache:
+                key: ${SERVICE_NAME}.${SERVICE_DOMAIN}-{{ checksum "service/composer.json" }}
+            - run:
+                name: Install Dependencies
+                command: cd service && composer install -n --ignore-platform-reqs
+            - save_cache:
+                key: ${SERVICE_NAME}.${SERVICE_DOMAIN}-{{ checksum "service/composer.json" }}
+                paths: service/vendor
+            - run:
+                name: Check for depricated code
+                command: deprecation-detector check service/src/ service/vendor/
+            - run:
+                name: Run PHPUnit test
+                command: |
+                    if [ -f "service/phpunit.xml" ]; then
+                        cp -i service/phpunit.xml.dist service/phpunit.xml && phpunit --configuration service/phpunit.xml
+                        exit 1;
+                    fi
+#            - run:
+#                name: Check if generated swagger.json is valid
+#                command: |
+#                    php service/bin/console swagger:dump -e dev > /tmp/swagger.json
+#                    resp=`swagger validate /tmp/swagger.json | awk '/errors/{if($2 != "0") print "false"}'`
+#                    if [[ $resp == "false" ]]; then
+#                        swagger validate /tmp/swagger.json
+#                        exit 1;
+#                    fi
+
+    push:
+        docker:
+            - image: smmhub/docker:1.0.1
+        working_directory: /workdir
+        steps:
+            - checkout
+            - setup_remote_docker:
+                reusable: true
+            - run:
+                name: Docker Login
+                command: docker login -u ${DOCKER_USER} -p ${DOCKER_PASS}
+            - run:
+                name: Add JIRA comment
+                command: |
+                    TAG=$(echo "$CIRCLE_BRANCH" | tr '[:upper:]' '[:lower:]' | sed 's/feature\///g' | sed 's/hotfix\///g' | sed 's/release\///g')
+                    if [[ ${CIRCLE_BRANCH} != 'development' &&  ${CIRCLE_BRANCH} != 'master' ]]; then
+                        CRED="{\"username\": \"$DOCKER_USER\", \"password\": \"$DOCKER_PASS\"}"
+                        TOKEN=$(curl -s -H "Content-Type: application/json" -X POST -d "$CRED" https://hub.docker.com/v2/users/login/ | jq -r .token)
+                        EXISTS=$(curl -s -H "Authorization: JWT ${TOKEN}" "https://hub.docker.com/v2/repositories/${DOCKERHUB_NAME}/${SERVICE_NAME}.${SERVICE_DOMAIN}/tags/?page_size=10000" | jq -r "[.results | .[] | .name == \"${TAG}\"] | any")
+                        if ! $EXISTS; then
+                            BRANCH=$(echo "$TAG" | sed 's/-/_/g');
+                            BODY="{\"body\": \" Instance: http://$TAG.${SERVICE_NAME}.${SERVICE_DEV_DOMAIN} \n DB: http://db.$TAG.${SERVICE_NAME}.${SERVICE_DEV_DOMAIN} (username: $BRANCH)\"}"
+                            curl -D- -u ${JIRA_USER}:${JIRA_PASSWORD} -X POST --data "$BODY" -H "Content-Type: application/json" http://jira.rghub.pro/rest/api/2/issue/${TAG}/comment
+                        fi
+                    fi
+            - run:
+                name: Build Docker image
+                command: |
+                    if [ "${CIRCLE_BRANCH}" != "master" ]; then
+                      cd service
+                      TAG=$(echo "$CIRCLE_BRANCH" | tr '[:upper:]' '[:lower:]' | sed 's/feature\///g' | sed 's/hotfix\///g' | sed 's/release\///g')
+                      docker build -t ${DOCKERHUB_NAME}/${SERVICE_NAME}.${SERVICE_DOMAIN}:$TAG .
+                      docker push ${DOCKERHUB_NAME}/${SERVICE_NAME}.${SERVICE_DOMAIN}:$TAG
+                    else
+                      $TAG=$(git log -1 --pretty=oneline --format=%B  | sed -e "s/.*release.\([0-9]\+\.[0-9]\+\.[0-9]\+\).*$/\1/")
+                      docker pull ${DOCKERHUB_NAME}/${SERVICE_NAME}.${SERVICE_DOMAIN}:$TAG
+                      docker tag ${DOCKERHUB_NAME}/${SERVICE_NAME}.${SERVICE_DOMAIN}:$TAG ${DOCKERHUB_NAME}/${SERVICE_NAME}.${SERVICE_DOMAIN}:latest
+                      docker push ${DOCKERHUB_NAME}/${SERVICE_NAME}.${SERVICE_DOMAIN}:latest
+                    fi
+
+    clear_cf_cache:
+        docker:
+            - image: smmhub/docker:1.0.1
+        working_directory: /workdir
+
+        steps:
+            - setup_remote_docker:
+                reusable: true
+            - run:
+                name: Clear cache
+                command: |
+                    curl  -X DELETE "https://api.cloudflare.com/client/v4/zones/${CLOUDFLARE_ZONE_ID}/purge_cache" \
+                       -H "X-Auth-Email: yegorshishov@gmail.com" \
+                       -H "X-Auth-Key: ${CLOUDFLARE_API_KEY}" \
+                       -H "Content-Type: application/json" \
+                       -d '{"purge_everything":true}'
+
+    deploy_feature:
+        <<: *deploys
+        steps:
+            - checkout
+            - *develop_env
+            - *deploy_dev_to_rancher
+
+    deploy_develop:
+        <<: *deploys
+        steps:
+            - checkout
+            - *develop_env
+            - run:
+                name: Delete old Rancher Stack.
+                command: |
+                    stack=$(git log -1 --stat --pretty=oneline | awk '{split($4,m,"/"); print tolower(m[2]"-${SERVICE_NAME}")}' | tr -d "'")
+                    if [[ ! "${stack}" =~ "^\d\.\d(.\d)-${SERVICE_NAME}" ]]; then
+                        rancher rm --type stack $stack || true
+                    fi
+            - run:
+                name: Change domain
+                command: |
+                    echo "export FDQN_BACKEND=${SERVICE_NAME}.${FDQN_BACKEND}" >> $BASH_ENV
+            - *deploy_dev_to_rancher
+
+    deploy_stage:
+        <<: *deploys
+
+        steps:
+            - checkout
+            - *production_env
+            - run:
+                name: Deploy and update image to Rancher.
+                command: |
+                   echo "export ENV=staging" >> $BASH_ENV
+                   echo "export RANCHER_STACK=staging-${CIRCLE_PROJECT_REPONAME}" >> $BASH_ENV
+                   echo "export FDQN_BACKEND=staging-${SERVICE_NAME}.${SERVICE_DOMAIN}" >> $BASH_ENV
+                   echo "export SERVICE_NAMESPACE=staging" >> $BASH_ENV
+
+            - *deploy_to_rancher
+
+    deploy_production:
+        <<: *deploys
+        steps:
+            - checkout
+            - *production_env
+            - *deploy_to_rancher
+
+workflows:
+    version: 2
+    build_and_deploy:
+        jobs:
+            - test:
+                filters:
+                    branches:
+                        ignore:
+                            - master
+            - push
+            - deploy_feature:
+                requires:
+                    - test
+                    - push
+                filters:
+                    branches:
+                        ignore:
+                            - development
+                            - /^release\/.*$/
+                            - master
+            - deploy_develop:
+                requires:
+                    - test
+                    - push
+                filters:
+                    branches:
+                        only: development
+            - deploy_stage:
+                requires:
+                    - push
+                filters:
+                    branches:
+                        only:
+                            - /^release\/.*$/
+            - deploy_production:
+                requires:
+                    - push
+                filters:
+                    branches:
+                        only: master
+            - clear_cf_cache:
+                requires:
+                    - deploy_production
+                    - deploy_stage
