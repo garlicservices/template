@@ -1,5 +1,5 @@
-# Hubber service template (PHP7-FPM - MySQL)
-Hubber service template application. This complete stack run with docker and [docker-compose (1.7 or higher)](https://docs.docker.com/compose/).
+# Garlic service template (PHP7-FPM - MySQL)
+Garlic service template application. This complete stack run with docker and [docker-compose (1.7 or higher)](https://docs.docker.com/compose/).
 
 ## Installation
 
@@ -17,14 +17,14 @@ Hubber service template application. This complete stack run with docker and [do
     $ docker-compose up -d
     ```
 
-3. Update your system host file (add template.hubber.local)
+3. Update your system host file (add template.garlic.local)
 
     ```bash
     # UNIX only: get containers IP address and update host (replace IP according to your configuration)
     $ docker network inspect bridge | grep Gateway
 
     # unix only (on Windows, edit C:\Windows\System32\drivers\etc\hosts)
-    $ sudo echo "171.17.0.1 template.hubber.local" >> /etc/hosts
+    $ sudo echo "171.17.0.1 template.garlic.local" >> /etc/hosts
     ```
 
     **Note:** For **OS X**, please take a look [here](https://docs.docker.com/docker-for-mac/networking/) and for **Windows** read [this](https://docs.docker.com/docker-for-windows/#/step-4-explore-the-application-and-run-examples) (4th step).
@@ -46,7 +46,7 @@ Hubber service template application. This complete stack run with docker and [do
 
 Just run `docker-compose up -d`, then:
 
-* Symfony app: visit [template.hubber.local](http://template.hubber.local)  
+* Symfony app: visit [template.garlic.local](http://template.garlic.local)  
 
 ## Customize
 

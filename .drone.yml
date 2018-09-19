@@ -60,7 +60,7 @@ pipeline:
         context: application/
         dockerfile: application/Dockerfile
         secrets: [ docker_username, docker_password ]
-        repo: hubberonline/template
+        repo: garlic/template
         tags: ${DRONE_COMMIT_BRANCH##feature/}
         volumes:
           - /var/run/docker.sock:/var/run/docker.sock
@@ -73,7 +73,7 @@ pipeline:
         context: application/
         dockerfile: application/Dockerfile
         secrets: [ docker_username, docker_password ]
-        repo: hubberonline/template
+        repo: garlic/template
         tags: ${DRONE_COMMIT_BRANCH##release/}
         volumes:
           - /var/run/docker.sock:/var/run/docker.sock
