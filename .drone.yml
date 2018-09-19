@@ -1,0 +1,82 @@
+pipeline:
+
+    Restore Composer cache:
+        image: plugins/s3-cache:1
+        pull: true
+        secrets: [ aws_access_key_id, aws_secret_access_key ]
+        restore: true
+        when:
+            branch:
+                include: [ development, feature/*, release/* ]
+
+    Install Composer dependencies:
+        image: imaximius/essentials:latest
+        commands:
+           - cd application
+             && composer install -n --ignore-platform-reqs
+        when:
+            branch:
+                include: [ development, feature/*, release/* ]
+
+    Update Composer cache:
+        image: plugins/s3-cache:1
+        secrets: [ aws_access_key_id, aws_secret_access_key ]
+        rebuild: true
+        pull: true
+        mount:
+            - application/vendor
+        when:
+            event: push
+            branch:
+                include: [ development, feature/*, release/* ]
+
+    Flush Composer cache:
+        image: plugins/s3-cache:1
+        secrets: [ aws_access_key_id, aws_secret_access_key ]
+        pull: true
+        flush: true
+        flush_age: 14
+        when:
+            branch:
+                include: [ development, feature/*, release/* ]
+
+    Code checks:
+        image: imaximius/essentials:latest
+        commands:
+           - phpmd application/src text naming --exclude $id,$em,$qb
+           - phpmd application/src text design
+           - phpcs --standard=PSR2 application/src
+           - phpdcd application/src
+           - phpcpd application/src
+           - phpmd application/src text codesize
+           - deprecation-detector check application/src application/vendor/
+           - phpmd application/src text unusedcode
+        when:
+            branch:
+                include: [ development, feature/* ]
+
+    Build Feature image:
+        image: plugins/docker
+        context: application/
+        dockerfile: application/Dockerfile
+        secrets: [ docker_username, docker_password ]
+        repo: hubberonline/template
+        tags: ${DRONE_COMMIT_BRANCH##feature/}
+        volumes:
+          - /var/run/docker.sock:/var/run/docker.sock
+        when:
+            branch:
+                include: [ development, feature/* ]
+
+    Build Release image:
+        image: plugins/docker
+        context: application/
+        dockerfile: application/Dockerfile
+        secrets: [ docker_username, docker_password ]
+        repo: hubberonline/template
+        tags: ${DRONE_COMMIT_BRANCH##release/}
+        volumes:
+          - /var/run/docker.sock:/var/run/docker.sock
+        when:
+            branch:
+                include: [ release/* ]

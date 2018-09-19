@@ -1,6 +1,5 @@
-# Service template (PHP7-FPM - NGINX - MySQL)
-
-Service template application. This complete stack run with docker and [docker-compose (1.7 or higher)](https://docs.docker.com/compose/).
+# Hubber service template (PHP7-FPM - MySQL)
+Hubber service template application. This complete stack run with docker and [docker-compose (1.7 or higher)](https://docs.docker.com/compose/).
 
 ## Installation
 
@@ -18,14 +17,14 @@ Service template application. This complete stack run with docker and [docker-co
     $ docker-compose up -d
     ```
 
-3. Update your system host file (add template.services.dev)
+3. Update your system host file (add template.hubber.local)
 
     ```bash
     # UNIX only: get containers IP address and update host (replace IP according to your configuration)
     $ docker network inspect bridge | grep Gateway
 
     # unix only (on Windows, edit C:\Windows\System32\drivers\etc\hosts)
-    $ sudo echo "171.17.0.1 template.services.dev" >> /etc/hosts
+    $ sudo echo "171.17.0.1 template.hubber.local" >> /etc/hosts
     ```
 
     **Note:** For **OS X**, please take a look [here](https://docs.docker.com/docker-for-mac/networking/) and for **Windows** read [this](https://docs.docker.com/docker-for-windows/#/step-4-explore-the-application-and-run-examples) (4th step).
@@ -47,7 +46,7 @@ Service template application. This complete stack run with docker and [docker-co
 
 Just run `docker-compose up -d`, then:
 
-* Symfony app: visit [template.services.dev](http://template.services.dev)  
+* Symfony app: visit [template.hubber.local](http://template.hubber.local)  
 
 ## Customize
 
@@ -59,8 +58,6 @@ Have a look at the `docker-compose.yml` file, here are the `docker-compose` buil
 
 * `db`: This is the MySQL database container,
 * `php`: This is the PHP-FPM container in which the application volume is mounted,
-* `nginx`: This is the Nginx webserver container in which application volume is mounted too,
-* `elk`: This is a ELK stack container which uses Logstash to collect logs, send them into Elasticsearch and visualize them with Kibana.
 
 This results in the following running containers:
 
@@ -69,7 +66,6 @@ $ docker-compose ps
            Name                          Command               State              Ports            
 --------------------------------------------------------------------------------------------------
 dockersymfony_db_1            /entrypoint.sh mysqld            Up      0.0.0.0:3306->3306/tcp      
-dockersymfony_nginx_1         nginx                            Up      443/tcp, 0.0.0.0:80->80/tcp
 dockersymfony_php_1           php-fpm                          Up      0.0.0.0:9000->9000/tcp      
 ```
 
@@ -83,7 +79,7 @@ $ docker-compose exec php bash
 $ docker-compose exec php composer update
 
 # SF commands (Tips: there is an alias inside php container)
-$ docker-compose exec php /var/www/template.socialmedia.market/bin/console cache:clear # Symfony
+$ docker-compose exec php /var/www/bin/console cache:clear # Symfony
 # Same command by using alias
 $ docker-compose exec php bash
 $ sf cache:clear
@@ -96,7 +92,7 @@ $ docker inspect $(docker ps -f name=nginx -q) | grep IPAddress
 $ docker-compose exec db mysql -uroot -p"root"
 
 # F***ing cache/logs folder
-$ sudo chmod -R 777 var/cache var/logs # Symfony3
+$ sudo chmod -R 777 var/cache var/logs # Symfony
 
 # Check CPU consumption
 $ docker stats $(docker inspect -f "{{ .Name }}" $(docker ps -q))
