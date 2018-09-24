@@ -4,7 +4,6 @@ namespace App\Controller;
 
 use Garlic\Bus\Entity\Response;
 use Garlic\Bus\Service\CommunicatorService;
-use GeneratorService;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\Route;
 use Symfony\Bundle\FrameworkBundle\Controller\Controller;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\Security;
@@ -15,14 +14,14 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 class DefaultController extends Controller
 {
     /**
-     * Default method that requests default route from Cabinet service (for example)
+     * Default method that requests default route from Template service (for example)
      *
      * @Route("/{param}", name="default", methods={"GET"})
      * @Security("is_granted('ROLE_ADMIN')")
      *
      * @SWG\Response(
      *     response=200,
-     *     description="Returns contents of request to Cabinet service",
+     *     description="Returns contents of request to Template service",
      *     @SWG\Schema(
      *         type="array",
      *         @Model(type=JsonResponse::class)
