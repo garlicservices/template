@@ -19,6 +19,11 @@ services:
             DEBUG: "true"
             SERVICE_NAME: ${SERVICE_NAME}
             SERVICE_DOMAIN: ${SERVICE_DOMAIN}
+            MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+            MYSQL_DATABASE: ${MYSQL_DATABASE}
+            MYSQL_USER: ${MYSQL_USER}
+            MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+            MYSQL_HOST: ${MYSQL_HOST}
         volumes:
             - ./application:/var/www:Z
             - ./logs/${SERVICE_NAME}.${SERVICE_DOMAIN}:/var/www/var/logs
