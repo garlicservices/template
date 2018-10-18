@@ -33,6 +33,7 @@ Garlic service template application. This complete stack run with docker and [do
         Composer install & create database
 
         ```bash
+        $ docker-compose exec mysql bash -c /home/db.sh
         $ docker-compose exec php bash
         $ composer install
         $ sf doctrine:database:create

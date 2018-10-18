@@ -5,6 +5,7 @@ services:
         image: mysql:5.7
         volumes:
             - "./.data/db:/var/lib/mysql"
+            - ./deployment/mysql:/home:Z
         ports:
           - 3306:3306
         environment:
